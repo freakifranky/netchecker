@@ -4,8 +4,19 @@ import Foundation
 import Combine
 import AppKit
 
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        ProcessInfo.processInfo.disableAutomaticTermination("NetChecker should remain active as a menu bar utility")
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        ProcessInfo.processInfo.enableAutomaticTermination("NetChecker terminating")
+    }
+}
+
 @main
 struct NetCheckerApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @StateObject private var monitor = NetworkMonitor()
     @StateObject private var speedTester = SpeedTester()
 
@@ -109,24 +120,75 @@ final class NetworkMonitor: ObservableObject {
     @Published var symbolName: String = "ellipsis.circle"
     @Published var shortLabel: String = "…"
 
-    private let monitor = NWPathMonitor()
+    private var monitor: NWPathMonitor?
     private let queue = DispatchQueue(label: "NetworkMonitorQueue")
+    private var observers: [NSObjectProtocol] = []
 
     init() {
-        monitor.pathUpdateHandler = { [weak self] path in
+        startMonitor()
+        observeSleepWake()
+    }
+
+    deinit {
+        stopMonitor()
+        observers.forEach { NSWorkspace.shared.notificationCenter.removeObserver($0) }
+    }
+
+    func refreshSnapshot() {
+        guard let path = monitor?.currentPath else { return }
+        update(from: path)
+    }
+
+    private func startMonitor() {
+        stopMonitor()
+
+        let newMonitor = NWPathMonitor()
+        newMonitor.pathUpdateHandler = { [weak self] path in
             DispatchQueue.main.async {
                 self?.update(from: path)
             }
         }
-        monitor.start(queue: queue)
+
+        newMonitor.start(queue: queue)
+        monitor = newMonitor
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+            self?.refreshSnapshot()
+        }
     }
 
-    deinit {
-        monitor.cancel()
+    private func stopMonitor() {
+        monitor?.cancel()
+        monitor = nil
     }
 
-    func refreshSnapshot() {
-        update(from: monitor.currentPath)
+    private func observeSleepWake() {
+        let willSleep = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.willSleepNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.statusText = "Sleeping"
+            self?.detailText = "Mac is sleeping"
+            self?.symbolName = "moon.zzz"
+            self?.shortLabel = "Sleep"
+        }
+
+        let didWake = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didWakeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.statusText = "Waking…"
+            self?.detailText = "Reconnecting network status"
+            self?.symbolName = "arrow.clockwise"
+            self?.shortLabel = "Wake"
+
+            self?.startMonitor()
+        }
+
+        observers.append(willSleep)
+        observers.append(didWake)
     }
 
     private func update(from path: NWPath) {
