@@ -534,12 +534,15 @@ final class SpeedTester: ObservableObject {
 
     private func measureDownloadMbps() async -> Result<Double, SpeedMeasurementError> {
         let start = CFAbsoluteTimeGetCurrent()
+        let url = Self.downloadURL(bytes: downloadBytes)
 
         do {
-            let (data, response) = try await transferSession.data(from: Self.downloadURL(bytes: downloadBytes))
+            let (data, response) = try await transferSession.data(from: url)
 
             guard let http = response as? HTTPURLResponse,
                   (200..<400).contains(http.statusCode) else {
+                let code = (response as? HTTPURLResponse)?.statusCode ?? -1
+                NSLog("NetChecker download test: bad response, status=%d, url=%@", code, url.absoluteString)
                 return .failure(.badResponse)
             }
 
@@ -547,8 +550,10 @@ final class SpeedTester: ObservableObject {
             let bits = Double(data.count * 8)
             return .success(bits / duration / 1_000_000)
         } catch let error as URLError where error.code == .timedOut {
+            NSLog("NetChecker download test: timed out, url=%@", url.absoluteString)
             return .failure(.timeout)
         } catch {
+            NSLog("NetChecker download test failed: %@ (code=%d) url=%@", error.localizedDescription, (error as NSError).code, url.absoluteString)
             return .failure(.network(error.localizedDescription))
         }
     }
