@@ -20,25 +20,24 @@ jobs:
             -project NetChecker.xcodeproj \
             -target NetChecker \
             -configuration Debug \
-            -derivedDataPath build \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
+            CONFIGURATION_BUILD_DIR="$PWD/build" \
             build
 
       - name: Ad-hoc codesign so it can launch
         run: |
-          APP_PATH="build/Build/Products/Debug/NetChecker.app"
-          codesign --force --deep --sign - "$APP_PATH"
+          codesign --force --deep --sign - "build/NetChecker.app"
 
       - name: Zip app for download
         run: |
-          cd build/Build/Products/Debug
+          cd build
           ditto -c -k --sequesterRsrc --keepParent NetChecker.app NetChecker.zip
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: NetChecker-app
-          path: build/Build/Products/Debug/NetChecker.zip
+          path: build/NetChecker.zip
           retention-days: 14
