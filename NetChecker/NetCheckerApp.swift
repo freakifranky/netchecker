@@ -536,8 +536,15 @@ final class SpeedTester: ObservableObject {
         let start = CFAbsoluteTimeGetCurrent()
         let url = Self.downloadURL(bytes: downloadBytes)
 
+        // Cloudflare's speed-test endpoints reject requests that don't look like
+        // they came from https://speed.cloudflare.com itself (no Referer/Origin
+        // gets a silent 403), so we set the same headers a browser would send.
+        var request = URLRequest(url: url)
+        request.setValue("https://speed.cloudflare.com/", forHTTPHeaderField: "Referer")
+        request.setValue("https://speed.cloudflare.com", forHTTPHeaderField: "Origin")
+
         do {
-            let (data, response) = try await transferSession.data(from: url)
+            let (data, response) = try await transferSession.data(for: request)
 
             guard let http = response as? HTTPURLResponse,
                   (200..<400).contains(http.statusCode) else {
@@ -564,6 +571,8 @@ final class SpeedTester: ObservableObject {
         var request = URLRequest(url: Self.uploadURL)
         request.httpMethod = "POST"
         request.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type")
+        request.setValue("https://speed.cloudflare.com/", forHTTPHeaderField: "Referer")
+        request.setValue("https://speed.cloudflare.com", forHTTPHeaderField: "Origin")
 
         let start = CFAbsoluteTimeGetCurrent()
 
