@@ -30,17 +30,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, CLLocationManagerDeleg
         // No-op: WiFiController checks the current interface lazily whenever it needs it.
     }
 }
-
-final class AppDelegate: NSObject, NSApplicationDelegate {
-    func applicationDidFinishLaunching(_ notification: Notification) {
-        ProcessInfo.processInfo.disableAutomaticTermination("NetChecker should remain active as a menu bar utility")
-    }
-
-    func applicationWillTerminate(_ notification: Notification) {
-        ProcessInfo.processInfo.enableAutomaticTermination("NetChecker terminating")
-    }
-}
-
 @main
 struct NetCheckerApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
